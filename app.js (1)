@@ -1,6 +1,12 @@
 /* =========================================================
-   MR REAPER — APP.JS
+   MR REAPER
+   ONLINE ELIMINATION GAME
    ========================================================= */
+
+
+// =========================================================
+// SUPABASE CONFIG
+// =========================================================
 
 const SUPABASE_URL =
   "https://hyyevttvizxlsyuylbgm.supabase.co";
@@ -8,108 +14,129 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
   "sb_publishable_ks2EQ7mWi7jTQvrdO-ftUA_1_IRys4S";
 
+
 let supabaseClient = null;
+
+
+// =========================================================
+// GAME STATE
+// =========================================================
+
 let currentPlayer = null;
+
 let currentRoom = null;
+
 let roomChannel = null;
-let isHost = false;
-let gameStarted = false;
+
+let actionRunning = false;
 
 
-/* =========================================================
-   HELPERS
-   ========================================================= */
+// =========================================================
+// DOM
+// =========================================================
 
-const $ = id => document.getElementById(id);
+const $ = id =>
+  document.getElementById(id);
 
-function getEl(...ids) {
-  for (const id of ids) {
-    const el = $(id);
-    if (el) return el;
-  }
-  return null;
-}
 
-function notify(message) {
-  console.log("[MR REAPER]", message);
+// =========================================================
+// STATUS
+// =========================================================
 
-  const el = getEl(
-    "statusMessage",
-    "message",
-    "notification",
-    "errorMessage",
-    "error"
-  );
+function setStatus(
+  message,
+  type = "loading"
+) {
 
-  if (el) {
-    el.textContent = message;
-    el.style.display = "block";
-  }
-}
+  const box =
+    $("systemStatus");
 
-function setConnection(text) {
-  const el = getEl(
-    "connectionStatus",
-    "connection-status",
-    "status",
-    "reaperStatus"
-  );
+  const text =
+    $("statusText");
 
-  if (el) el.textContent = text;
+  if (!box || !text) return;
+
+  box.className =
+    "system-status " + type;
+
+  text.textContent =
+    message;
 }
 
 
-/* =========================================================
-   SUPABASE
-   ========================================================= */
-
-function initSupabase() {
-  if (!window.supabase) {
-    notify("Supabase library failed to load.");
-    return false;
-  }
-
-  try {
-    supabaseClient =
-      window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_KEY
-      );
-
-    setConnection("REAPER CONNECTION ONLINE");
-
-    return true;
-  } catch (err) {
-    console.error(err);
-    notify("Supabase initialization failed.");
-    return false;
-  }
+function loading(message) {
+  setStatus(message, "loading");
 }
 
 
-/* =========================================================
-   PLAYER ID
-   ========================================================= */
-
-function generatePlayerId() {
-  return (
-    "p_" +
-    Date.now().toString(36) +
-    "_" +
-    Math.random()
-      .toString(36)
-      .substring(2, 10)
-  );
+function online(message) {
+  setStatus(message, "online");
 }
+
+
+function errorStatus(message) {
+  setStatus(message, "error");
+}
+
+
+// =========================================================
+// BUTTON LOCK
+// =========================================================
+
+function lockButtons(lock) {
+
+  const buttons =
+    document.querySelectorAll(
+      ".game-btn"
+    );
+
+
+  buttons.forEach(button => {
+
+    if (lock) {
+
+      button.dataset.wasDisabled =
+        button.disabled
+          ? "yes"
+          : "no";
+
+      button.disabled = true;
+
+    } else {
+
+      if (
+        button.dataset.wasDisabled !==
+        "yes"
+      ) {
+        button.disabled = false;
+      }
+    }
+  });
+}
+
+
+// =========================================================
+// PLAYER ID
+// =========================================================
 
 function getPlayerId() {
+
   let id =
     sessionStorage.getItem(
       "mr_reaper_player_id"
     );
 
+
   if (!id) {
-    id = generatePlayerId();
+
+    id =
+      "p_" +
+      Date.now() +
+      "_" +
+      Math.random()
+        .toString(36)
+        .substring(2, 10);
+
 
     sessionStorage.setItem(
       "mr_reaper_player_id",
@@ -117,524 +144,939 @@ function getPlayerId() {
     );
   }
 
+
   return id;
 }
 
 
-/* =========================================================
-   ROOM CODE
-   ========================================================= */
+// =========================================================
+// PLAYER NAME
+// =========================================================
+
+function getPlayerName() {
+
+  const input =
+    $("playerNameInput");
+
+
+  let name =
+    input?.value?.trim();
+
+
+  if (!name) {
+
+    name =
+      sessionStorage.getItem(
+        "mr_reaper_player_name"
+      );
+  }
+
+
+  if (!name) {
+    name = "Player";
+  }
+
+
+  sessionStorage.setItem(
+    "mr_reaper_player_name",
+    name
+  );
+
+
+  return name;
+}
+
+
+// =========================================================
+// ROOM CODE
+// =========================================================
 
 function generateRoomCode() {
+
   const chars =
     "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+
   let code = "";
 
-  for (let i = 0; i < 5; i++) {
-    code += chars[
-      Math.floor(
-        Math.random() * chars.length
-      )
-    ];
+
+  for (
+    let i = 0;
+    i < 5;
+    i++
+  ) {
+
+    code +=
+      chars[
+        Math.floor(
+          Math.random() *
+          chars.length
+        )
+      ];
   }
+
 
   return code;
 }
 
 
-/* =========================================================
-   INPUTS
-   ========================================================= */
+// =========================================================
+// SCREEN CONTROL
+// =========================================================
 
-function getName() {
-  const input = getEl(
-    "playerName",
-    "name",
-    "username",
-    "player-name",
-    "nickname"
-  );
+function showScreen(screen) {
 
-  if (!input) return "REAPER";
-
-  return (
-    input.value.trim() || "REAPER"
-  ).substring(0, 20);
-}
-
-function getRoomCode() {
-  const input = getEl(
-    "roomCode",
-    "room-code",
-    "joinCode",
-    "join-code",
-    "code"
-  );
-
-  if (!input) return "";
-
-  return input.value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .substring(0, 5);
-}
+  const screens = [
+    $("entryPage"),
+    $("lobbyPage"),
+    $("gamePage")
+  ];
 
 
-/* =========================================================
-   SCREEN CONTROL
-   ========================================================= */
+  screens.forEach(element => {
 
-function hideEverything() {
-  document
-    .querySelectorAll(
-      "[data-screen]"
-    )
-    .forEach(el => {
-      el.style.display = "none";
-    });
-
-  [
-    "entryPage",
-    "entry",
-    "loginPage",
-    "login",
-    "lobbyPage",
-    "lobby",
-    "roomPage",
-    "room",
-    "gamePage",
-    "game"
-  ].forEach(id => {
-    const el = $(id);
-
-    if (el) {
-      el.style.display = "none";
-    }
-  });
-}
-
-function showEntry() {
-  hideEverything();
-
-  const el = getEl(
-    "entryPage",
-    "entry",
-    "loginPage",
-    "login"
-  );
-
-  if (el) {
-    el.style.display = "block";
-  }
-}
-
-function showLobby() {
-  hideEverything();
-
-  const el = getEl(
-    "lobbyPage",
-    "lobby",
-    "roomPage",
-    "room"
-  );
-
-  if (el) {
-    el.style.display = "block";
-  }
-
-  updateLobby();
-}
-
-function showGame() {
-  hideEverything();
-
-  const el = getEl(
-    "gamePage",
-    "game"
-  );
-
-  if (el) {
-    el.style.display = "block";
-  }
-
-  gameStarted = true;
-  startGame();
-}
-
-
-/* =========================================================
-   CREATE ROOM
-   ========================================================= */
-
-async function createRoom() {
-  if (!supabaseClient) {
-    if (!initSupabase()) return;
-  }
-
-  const name = getName();
-  const playerId = getPlayerId();
-
-  setConnection("CREATING ROOM...");
-
-  try {
-    let code = null;
-
-    for (let i = 0; i < 10; i++) {
-      const candidate =
-        generateRoomCode();
-
-      const { data, error } =
-        await supabaseClient
-          .from("rooms")
-          .select("code")
-          .eq("code", candidate)
-          .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data) {
-        code = candidate;
-        break;
-      }
-    }
-
-    if (!code) {
-      throw new Error(
-        "Unable to generate room code."
+    if (element) {
+      element.classList.remove(
+        "active"
       );
     }
+  });
 
-    /*
-      Clean any previous row belonging
-      to this browser/player.
-    */
 
-    await supabaseClient
-      .from("players")
-      .delete()
-      .eq("id", playerId);
+  if (screen === "entry") {
+    $("entryPage")?.classList.add("active");
+  }
 
-    const {
-      data: room,
-      error: roomError
-    } = await supabaseClient
-      .from("rooms")
-      .insert({
-        code: code,
-        host_id: playerId,
-        state: "lobby",
-        round: 0
-      })
-      .select()
-      .single();
 
-    if (roomError) {
-      throw roomError;
-    }
+  if (screen === "lobby") {
+    $("lobbyPage")?.classList.add("active");
+  }
 
-    const {
-      data: player,
-      error: playerError
-    } = await supabaseClient
-      .from("players")
-      .insert({
-        id: playerId,
-        room_code: code,
-        name: name,
-        status: "alive"
-      })
-      .select()
-      .single();
 
-    if (playerError) {
-      await supabaseClient
-        .from("rooms")
-        .delete()
-        .eq("code", code);
-
-      throw playerError;
-    }
-
-    currentPlayer = player;
-    currentRoom = room;
-    isHost = true;
-
-    saveSession();
-
-    await subscribeToRoom();
-
-    showLobby();
-
-    setConnection(
-      "ROOM CREATED — " + code
-    );
-
-  } catch (err) {
-    console.error(err);
-
-    notify(
-      "CREATE ROOM ERROR: " +
-      (err.message || "Unknown error")
-    );
-
-    setConnection(
-      "REAPER CONNECTION ONLINE"
-    );
+  if (screen === "game") {
+    $("gamePage")?.classList.add("active");
   }
 }
 
 
-/* =========================================================
-   JOIN ROOM
-   ========================================================= */
+// =========================================================
+// ROOM CODE UI
+// =========================================================
 
-async function joinRoom() {
-  if (!supabaseClient) {
-    if (!initSupabase()) return;
-  }
+function updateRoomCode(code) {
 
-  const code = getRoomCode();
-  const name = getName();
-  const playerId = getPlayerId();
+  $("roomCodeDisplay").textContent =
+    code || "-----";
+}
 
-  if (code.length !== 5) {
-    notify("Enter a valid 5-character room code.");
+
+// =========================================================
+// PLAYER COUNT
+// =========================================================
+
+function updatePlayerCount(count) {
+
+  $("playerCount").textContent =
+    count;
+
+  $("gamePlayerCount").textContent =
+    count;
+}
+
+
+// =========================================================
+// ROUND
+// =========================================================
+
+function updateRound(round) {
+
+  $("roundDisplay").textContent =
+    round || 1;
+}
+
+
+// =========================================================
+// RENDER PLAYERS
+// =========================================================
+
+function renderPlayers(players) {
+
+  const list =
+    $("playersList");
+
+
+  list.innerHTML = "";
+
+
+  if (!players.length) {
+
+    list.innerHTML = `
+      <div class="empty-players">
+        Waiting for players...
+      </div>
+    `;
+
     return;
   }
 
-  setConnection("SEARCHING FOR ROOM...");
 
-  try {
-    const {
-      data: room,
-      error: roomError
-    } = await supabaseClient
+  players.forEach(player => {
+
+    const item =
+      document.createElement("div");
+
+
+    item.className =
+      "player-item";
+
+
+    const name =
+      document.createElement("span");
+
+
+    name.className =
+      "player-name";
+
+
+    name.textContent =
+      player.name || "Player";
+
+
+    const right =
+      document.createElement("span");
+
+
+    if (
+      currentRoom &&
+      player.id ===
+      currentRoom.host_id
+    ) {
+
+      right.className =
+        "player-host";
+
+      right.textContent =
+        "HOST 👑";
+    }
+
+
+    item.appendChild(name);
+
+    item.appendChild(right);
+
+    list.appendChild(item);
+  });
+}
+
+
+// =========================================================
+// GET ROOM
+// =========================================================
+
+async function getRoom(code) {
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
       .from("rooms")
       .select("*")
       .eq("code", code)
       .maybeSingle();
 
+
+  if (error) {
+    throw error;
+  }
+
+
+  return data;
+}
+
+
+// =========================================================
+// GET PLAYERS
+// =========================================================
+
+async function getPlayers(code) {
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from("players")
+      .select("*")
+      .eq("room_code", code)
+      .order(
+        "created_at",
+        {
+          ascending: true
+        }
+      );
+
+
+  if (error) {
+    throw error;
+  }
+
+
+  return data || [];
+}
+
+
+// =========================================================
+// REFRESH PLAYERS
+// =========================================================
+
+async function refreshPlayers() {
+
+  if (!currentRoom) {
+    return [];
+  }
+
+
+  const players =
+    await getPlayers(
+      currentRoom.code
+    );
+
+
+  renderPlayers(players);
+
+  updatePlayerCount(
+    players.length
+  );
+
+
+  return players;
+}
+
+
+// =========================================================
+// CREATE ROOM
+// =========================================================
+
+async function createRoom() {
+
+  if (actionRunning) return;
+
+
+  actionRunning = true;
+
+  lockButtons(true);
+
+  loading(
+    "Creating room..."
+  );
+
+
+  try {
+
+    const playerId =
+      getPlayerId();
+
+
+    const playerName =
+      getPlayerName();
+
+
+    let roomCode = null;
+
+
+    for (
+      let attempt = 0;
+      attempt < 20;
+      attempt++
+    ) {
+
+      const candidate =
+        generateRoomCode();
+
+
+      const existing =
+        await getRoom(
+          candidate
+        );
+
+
+      if (!existing) {
+
+        roomCode =
+          candidate;
+
+        break;
+      }
+    }
+
+
+    if (!roomCode) {
+
+      throw new Error(
+        "Could not create a unique room."
+      );
+    }
+
+
+    const {
+      data: room,
+      error: roomError
+    } =
+      await supabaseClient
+        .from("rooms")
+        .insert({
+          code: roomCode,
+          host_id: playerId,
+          state: "lobby",
+          round: 0
+        })
+        .select()
+        .single();
+
+
     if (roomError) {
       throw roomError;
     }
 
-    if (!room) {
-      notify("ROOM NOT FOUND.");
-      setConnection(
-        "REAPER CONNECTION ONLINE"
-      );
-      return;
-    }
-
-    if (room.state !== "lobby") {
-      notify(
-        "This game has already started."
-      );
-      return;
-    }
 
     const {
-      count,
-      error: countError
-    } = await supabaseClient
-      .from("players")
-      .select("*", {
-        count: "exact",
-        head: true
-      })
-      .eq("room_code", code)
-      .eq("status", "alive");
-
-    if (countError) {
-      throw countError;
-    }
-
-    if ((count || 0) >= 30) {
-      notify("ROOM IS FULL.");
-      return;
-    }
-
-    /*
-      Remove previous player row first.
-    */
-
-    await supabaseClient
-      .from("players")
-      .delete()
-      .eq("id", playerId);
-
-    const {
-      data: player,
       error: playerError
-    } = await supabaseClient
-      .from("players")
-      .insert({
-        id: playerId,
-        room_code: code,
-        name: name,
-        status: "alive"
-      })
-      .select()
-      .single();
+    } =
+      await supabaseClient
+        .from("players")
+        .upsert(
+          {
+            id: playerId,
+            room_code: roomCode,
+            name: playerName,
+            status: "alive"
+          },
+          {
+            onConflict: "id"
+          }
+        );
+
 
     if (playerError) {
       throw playerError;
     }
 
-    currentPlayer = player;
-    currentRoom = room;
-    isHost =
-      room.host_id === playerId;
 
-    saveSession();
+    currentRoom =
+      room;
 
-    await subscribeToRoom();
 
-    showLobby();
+    currentPlayer = {
+      id: playerId,
+      room_code: roomCode,
+      name: playerName,
+      status: "alive"
+    };
 
-    setConnection(
-      "CONNECTED TO ROOM " + code
+
+    sessionStorage.setItem(
+      "mr_reaper_room_code",
+      roomCode
     );
 
-  } catch (err) {
-    console.error(err);
 
-    notify(
-      "JOIN ERROR: " +
-      (err.message || "Unknown error")
+    updateRoomCode(
+      roomCode
     );
 
-    setConnection(
-      "REAPER CONNECTION ONLINE"
+
+    await refreshPlayers();
+
+
+    await subscribeToRoom(
+      roomCode
     );
+
+
+    showScreen("lobby");
+
+
+    online(
+      `Room ${roomCode} created`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "CREATE ERROR:",
+      error
+    );
+
+
+    errorStatus(
+      error.message ||
+      "Could not create room."
+    );
+
+
+  } finally {
+
+    actionRunning = false;
+
+    lockButtons(false);
   }
 }
 
 
-/* =========================================================
-   SESSION
-   ========================================================= */
+// =========================================================
+// JOIN ROOM
+// =========================================================
 
-function saveSession() {
-  if (currentRoom) {
-    sessionStorage.setItem(
-      "mr_reaper_room",
-      currentRoom.code
-    );
-  }
+async function joinRoom() {
 
-  if (currentPlayer) {
-    sessionStorage.setItem(
-      "mr_reaper_name",
-      currentPlayer.name
-    );
-  }
-}
+  if (actionRunning) return;
 
-function clearSession() {
-  sessionStorage.removeItem(
-    "mr_reaper_room"
+
+  actionRunning = true;
+
+  lockButtons(true);
+
+  loading(
+    "Joining room..."
   );
 
-  sessionStorage.removeItem(
-    "mr_reaper_name"
-  );
-}
-
-
-/* =========================================================
-   LOAD EXISTING SESSION
-   ========================================================= */
-
-async function restoreSession() {
-  if (!supabaseClient) return false;
-
-  const playerId = getPlayerId();
-
-  const roomCode =
-    sessionStorage.getItem(
-      "mr_reaper_room"
-    );
-
-  if (!roomCode) {
-    return false;
-  }
 
   try {
-    const {
-      data: player
-    } = await supabaseClient
-      .from("players")
-      .select("*")
-      .eq("id", playerId)
-      .maybeSingle();
 
-    if (!player) {
-      clearSession();
-      return false;
+    let code =
+      $("roomCodeInput")
+        .value
+        .trim()
+        .toUpperCase();
+
+
+    code =
+      code.replace(
+        /[^A-Z0-9]/g,
+        ""
+      );
+
+
+    if (code.length !== 5) {
+
+      throw new Error(
+        "Enter a valid 5-character room code."
+      );
     }
 
-    const {
-      data: room
-    } = await supabaseClient
-      .from("rooms")
-      .select("*")
-      .eq("code", roomCode)
-      .maybeSingle();
+
+    const room =
+      await getRoom(code);
+
 
     if (!room) {
-      clearSession();
-      return false;
+
+      throw new Error(
+        "Room not found."
+      );
     }
 
-    currentPlayer = player;
-    currentRoom = room;
-    isHost =
-      room.host_id === playerId;
 
-    await subscribeToRoom();
+    if (
+      room.state ===
+      "playing"
+    ) {
 
-    if (room.state === "playing") {
-      showGame();
-    } else {
-      showLobby();
+      throw new Error(
+        "That game has already started."
+      );
     }
 
-    return true;
 
-  } catch (err) {
-    console.error(err);
-    clearSession();
-    return false;
+    const players =
+      await getPlayers(code);
+
+
+    if (
+      players.length >= 30
+    ) {
+
+      throw new Error(
+        "Room is full."
+      );
+    }
+
+
+    const playerId =
+      getPlayerId();
+
+
+    const playerName =
+      getPlayerName();
+
+
+    const {
+      error
+    } =
+      await supabaseClient
+        .from("players")
+        .upsert(
+          {
+            id: playerId,
+            room_code: code,
+            name: playerName,
+            status: "alive"
+          },
+          {
+            onConflict: "id"
+          }
+        );
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    currentRoom =
+      room;
+
+
+    currentPlayer = {
+      id: playerId,
+      room_code: code,
+      name: playerName,
+      status: "alive"
+    };
+
+
+    sessionStorage.setItem(
+      "mr_reaper_room_code",
+      code
+    );
+
+
+    updateRoomCode(code);
+
+
+    await refreshPlayers();
+
+
+    await subscribeToRoom(code);
+
+
+    showScreen("lobby");
+
+
+    online(
+      `Joined room ${code}`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "JOIN ERROR:",
+      error
+    );
+
+
+    errorStatus(
+      error.message ||
+      "Could not join room."
+    );
+
+
+  } finally {
+
+    actionRunning = false;
+
+    lockButtons(false);
   }
 }
 
 
-/* =========================================================
-   REALTIME
-   ========================================================= */
+// =========================================================
+// START GAME
+// =========================================================
 
-async function subscribeToRoom() {
-  if (!currentRoom) return;
+async function startGame() {
 
-  if (roomChannel) {
-    try {
-      await supabaseClient
-        .removeChannel(roomChannel);
-    } catch (_) {}
+  if (actionRunning) return;
+
+
+  if (!currentRoom) {
+
+    errorStatus(
+      "You are not in a room."
+    );
+
+    return;
   }
 
-  const roomCode =
-    currentRoom.code;
+
+  if (
+    currentRoom.host_id !==
+    getPlayerId()
+  ) {
+
+    errorStatus(
+      "Only the host can start the game."
+    );
+
+    return;
+  }
+
+
+  actionRunning = true;
+
+  lockButtons(true);
+
+  loading(
+    "Starting game..."
+  );
+
+
+  try {
+
+    const players =
+      await refreshPlayers();
+
+
+    if (players.length < 2) {
+
+      throw new Error(
+        "You need at least 2 players."
+      );
+    }
+
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from("rooms")
+        .update({
+          state: "playing",
+          round: 1
+        })
+        .eq(
+          "code",
+          currentRoom.code
+        )
+        .select()
+        .single();
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    currentRoom =
+      data;
+
+
+    updateRound(1);
+
+
+    showScreen("game");
+
+
+    $("gameMessage").textContent =
+      "THE GAME HAS BEGUN.";
+
+
+    online(
+      "GAME STARTED"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "START ERROR:",
+      error
+    );
+
+
+    errorStatus(
+      error.message ||
+      "Could not start game."
+    );
+
+
+  } finally {
+
+    actionRunning = false;
+
+    lockButtons(false);
+  }
+}
+
+
+// =========================================================
+// LEAVE ROOM
+// =========================================================
+
+async function leaveRoom() {
+
+  if (actionRunning) return;
+
+
+  actionRunning = true;
+
+  lockButtons(true);
+
+  loading(
+    "Leaving room..."
+  );
+
+
+  try {
+
+    if (!currentRoom) {
+
+      showScreen("entry");
+
+      return;
+    }
+
+
+    const playerId =
+      getPlayerId();
+
+
+    await supabaseClient
+      .from("players")
+      .delete()
+      .eq(
+        "id",
+        playerId
+      );
+
+
+    const remaining =
+      await getPlayers(
+        currentRoom.code
+      );
+
+
+    if (
+      remaining.length === 0
+    ) {
+
+      await supabaseClient
+        .from("rooms")
+        .delete()
+        .eq(
+          "code",
+          currentRoom.code
+        );
+
+    } else if (
+      currentRoom.host_id ===
+      playerId
+    ) {
+
+      await supabaseClient
+        .from("rooms")
+        .update({
+          host_id:
+            remaining[0].id
+        })
+        .eq(
+          "code",
+          currentRoom.code
+        );
+    }
+
+
+    if (roomChannel) {
+
+      await supabaseClient
+        .removeChannel(
+          roomChannel
+        );
+
+      roomChannel = null;
+    }
+
+
+    sessionStorage.removeItem(
+      "mr_reaper_room_code"
+    );
+
+
+    currentRoom = null;
+
+    currentPlayer = null;
+
+
+    updateRoomCode("-----");
+
+    updatePlayerCount(0);
+
+
+    showScreen("entry");
+
+
+    online(
+      "You left the room"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "LEAVE ERROR:",
+      error
+    );
+
+
+    errorStatus(
+      error.message ||
+      "Could not leave room."
+    );
+
+
+  } finally {
+
+    actionRunning = false;
+
+    lockButtons(false);
+  }
+}
+
+
+// =========================================================
+// REALTIME ROOM
+// =========================================================
+
+async function subscribeToRoom(code) {
+
+  if (roomChannel) {
+
+    try {
+
+      await supabaseClient
+        .removeChannel(
+          roomChannel
+        );
+
+    } catch (_) {}
+
+    roomChannel = null;
+  }
+
 
   roomChannel =
-    supabaseClient.channel(
-      "reaper-room-" + roomCode
-    );
+    supabaseClient
+      .channel(
+        "mr-reaper-" +
+        code +
+        "-" +
+        Date.now()
+      );
+
 
   roomChannel
     .on(
@@ -644,23 +1086,20 @@ async function subscribeToRoom() {
         schema: "public",
         table: "players",
         filter:
-          "room_code=eq." + roomCode
+          "room_code=eq." + code
       },
-      payload => {
-        log(
-          "Player update:",
-          payload
-        );
+      async () => {
 
-        updateLobby();
+        try {
 
-        if (
-          payload.new &&
-          payload.new.id ===
-            getPlayerId()
-        ) {
-          currentPlayer =
-            payload.new;
+          await refreshPlayers();
+
+        } catch (error) {
+
+          console.error(
+            "PLAYER UPDATE ERROR:",
+            error
+          );
         }
       }
     )
@@ -671,520 +1110,363 @@ async function subscribeToRoom() {
         schema: "public",
         table: "rooms",
         filter:
-          "code=eq." + roomCode
+          "code=eq." + code
       },
-      payload => {
-        log(
-          "Room update:",
+      async payload => {
+
+        console.log(
+          "ROOM UPDATE:",
           payload
         );
 
-        if (payload.new) {
-          currentRoom =
-            payload.new;
 
-          isHost =
-            currentRoom.host_id ===
-            getPlayerId();
+        if (!payload.new) {
+          return;
+        }
 
-          if (
-            currentRoom.state ===
-            "playing"
-          ) {
-            if (!gameStarted) {
-              showGame();
-            }
-          } else {
-            updateLobby();
-          }
+
+        currentRoom =
+          payload.new;
+
+
+        updateRoomCode(
+          currentRoom.code
+        );
+
+
+        updateRound(
+          currentRoom.round
+        );
+
+
+        if (
+          currentRoom.state ===
+          "playing"
+        ) {
+
+          showScreen("game");
+
+
+          $("gameMessage").textContent =
+            "THE GAME HAS BEGUN.";
+
+
+          online(
+            "GAME IN PROGRESS"
+          );
+
+        } else {
+
+          showScreen("lobby");
+
+
+          online(
+            "LOBBY UPDATED"
+          );
         }
       }
     )
     .subscribe(status => {
+
       console.log(
-        "Realtime status:",
+        "Realtime:",
         status
       );
 
+
       if (
-        status === "SUBSCRIBED"
+        status ===
+        "SUBSCRIBED"
       ) {
-        setConnection(
+
+        online(
           "REALTIME ONLINE"
         );
       }
+
+
+      if (
+        status ===
+        "CHANNEL_ERROR"
+      ) {
+
+        errorStatus(
+          "Realtime connection error."
+        );
+      }
     });
 }
 
 
-/* =========================================================
-   UPDATE LOBBY
-   ========================================================= */
+// =========================================================
+// RETURN TO LOBBY
+// =========================================================
 
-async function updateLobby() {
-  if (!currentRoom || !supabaseClient) {
+async function returnToLobby() {
+
+  if (!currentRoom) {
+
+    showScreen("entry");
+
     return;
   }
 
-  const roomCode =
-    currentRoom.code;
 
-  /*
-    Room code
-  */
-
-  const codeElements = document.querySelectorAll(
-    "#displayRoomCode, #roomDisplay, #roomCodeDisplay, .room-code-display, [data-room-code]"
+  loading(
+    "Returning to lobby..."
   );
 
-  codeElements.forEach(el => {
-    el.textContent = roomCode;
-  });
-
-  /*
-    Host label
-  */
-
-  const hostElements =
-    document.querySelectorAll(
-      "#hostStatus, #hostLabel, [data-host]"
-    );
-
-  hostElements.forEach(el => {
-    el.textContent =
-      isHost
-        ? "HOST"
-        : "PLAYER";
-  });
-
-  /*
-    Get players
-  */
 
   try {
-    const {
-      data: players,
-      error
-    } = await supabaseClient
-      .from("players")
-      .select("*")
-      .eq("room_code", roomCode)
-      .order("created_at", {
-        ascending: true
-      });
 
-    if (error) {
-      throw error;
-    }
-
-    renderPlayers(
-      players || []
-    );
-
-    updatePlayerCount(
-      players || []
-    );
-
-    updateStartButton(
-      players || []
-    );
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-
-/* =========================================================
-   RENDER PLAYERS
-   ========================================================= */
-
-function renderPlayers(players) {
-  const container = getEl(
-    "playersList",
-    "playerList",
-    "lobbyPlayers",
-    "players",
-    "player-container"
-  );
-
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  players.forEach((player, index) => {
-    const item =
-      document.createElement("div");
-
-    item.className =
-      "reaper-player";
-
-    const crown =
-      player.id ===
-      currentRoom?.host_id
-        ? " 👑"
-        : "";
-
-    item.innerHTML = `
-      <span class="player-number">
-        ${index + 1}
-      </span>
-
-      <span class="player-name">
-        ${escapeHTML(
-          player.name
-        )}${crown}
-      </span>
-
-      <span class="player-status">
-        ${player.status || "alive"}
-      </span>
-    `;
-
-    container.appendChild(item);
-  });
-}
-
-function updatePlayerCount(players) {
-  const count =
-    players.length;
-
-  document
-    .querySelectorAll(
-      "#playerCount, #playersCount, [data-player-count]"
-    )
-    .forEach(el => {
-      el.textContent =
-        count + " / 30";
-    });
-}
-
-
-/* =========================================================
-   START BUTTON
-   ========================================================= */
-
-function updateStartButton(players) {
-  const button = getEl(
-    "startGame",
-    "startBtn",
-    "startButton",
-    "start-game"
-  );
-
-  if (!button) return;
-
-  if (!isHost) {
-    button.style.display =
-      "none";
-    return;
-  }
-
-  button.style.display =
-    "block";
-
-  if (players.length < 2) {
-    button.disabled = true;
-    button.textContent =
-      "WAITING FOR PLAYERS";
-  } else {
-    button.disabled = false;
-    button.textContent =
-      "START GAME";
-  }
-}
-
-
-/* =========================================================
-   START GAME
-   ========================================================= */
-
-async function startGame() {
-  if (!currentRoom) return;
-
-  if (!isHost) {
-    notify(
-      "Only the host can start the game."
-    );
-    return;
-  }
-
-  try {
-    const {
-      count,
-      error: countError
-    } = await supabaseClient
-      .from("players")
-      .select("*", {
-        count: "exact",
-        head: true
-      })
-      .eq(
-        "room_code",
+    const room =
+      await getRoom(
         currentRoom.code
-      )
-      .eq("status", "alive");
-
-    if (countError) {
-      throw countError;
-    }
-
-    if ((count || 0) < 2) {
-      notify(
-        "At least 2 players are required."
       );
+
+
+    if (!room) {
+
+      sessionStorage.removeItem(
+        "mr_reaper_room_code"
+      );
+
+
+      currentRoom = null;
+
+      showScreen("entry");
+
+      errorStatus(
+        "Room no longer exists."
+      );
+
       return;
     }
 
-    const {
-      data,
-      error
-    } = await supabaseClient
-      .from("rooms")
-      .update({
-        state: "playing",
-        round: 1
-      })
-      .eq(
-        "code",
-        currentRoom.code
-      )
-      .eq(
-        "host_id",
-        getPlayerId()
-      )
-      .select()
-      .single();
 
-    if (error) {
-      throw error;
-    }
+    currentRoom =
+      room;
 
-    currentRoom = data;
 
-    gameStarted = true;
+    await refreshPlayers();
 
-    showGame();
 
-  } catch (err) {
-    console.error(err);
+    updateRoomCode(
+      room.code
+    );
 
-    notify(
-      "START GAME ERROR: " +
-      (err.message || "Unknown error")
+
+    updateRound(
+      room.round
+    );
+
+
+    showScreen("lobby");
+
+
+    online(
+      "LOBBY READY"
+    );
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    errorStatus(
+      "Could not load lobby."
     );
   }
 }
 
 
-/* =========================================================
-   GAME
-   ========================================================= */
+// =========================================================
+// RESTORE SESSION
+// =========================================================
 
-function startGame() {
-  gameStarted = true;
+async function restoreSession() {
 
-  const roomCode =
-    currentRoom?.code || "";
-
-  document
-    .querySelectorAll(
-      "#gameRoomCode, [data-game-room]"
-    )
-    .forEach(el => {
-      el.textContent = roomCode;
-    });
-
-  /*
-    Initial game state.
-    The actual game mechanics can be attached
-    here without affecting login/lobby.
-  */
-
-  const title =
-    getEl(
-      "gameStatus",
-      "roundStatus",
-      "gameMessage"
+  const savedRoom =
+    sessionStorage.getItem(
+      "mr_reaper_room_code"
     );
 
-  if (title) {
-    title.textContent =
-      "ROUND 1 — PREPARE";
+
+  if (!savedRoom) {
+
+    showScreen("entry");
+
+    online(
+      "REAPER CONNECTION ONLINE"
+    );
+
+    return;
   }
 
-  log(
-    "Game started in room:",
-    roomCode
+
+  loading(
+    "Restoring session..."
   );
-}
 
-
-/* =========================================================
-   LEAVE ROOM
-   ========================================================= */
-
-async function leaveRoom() {
-  const playerId =
-    getPlayerId();
 
   try {
-    if (roomChannel) {
-      await supabaseClient
-        .removeChannel(
-          roomChannel
-        );
 
-      roomChannel = null;
+    const room =
+      await getRoom(
+        savedRoom
+      );
+
+
+    if (!room) {
+
+      sessionStorage.removeItem(
+        "mr_reaper_room_code"
+      );
+
+
+      showScreen("entry");
+
+      online("READY");
+
+      return;
     }
 
-    if (
-      currentRoom &&
-      currentRoom.host_id ===
-        playerId
-    ) {
-      /*
-        Host leaves:
-        remove all players and room.
-      */
 
+    const playerId =
+      getPlayerId();
+
+
+    const {
+      data: player
+    } =
       await supabaseClient
         .from("players")
-        .delete()
-        .eq(
-          "room_code",
-          currentRoom.code
-        );
-
-      await supabaseClient
-        .from("rooms")
-        .delete()
-        .eq(
-          "code",
-          currentRoom.code
-        );
-
-    } else {
-      /*
-        Normal player leaves.
-      */
-
-      await supabaseClient
-        .from("players")
-        .delete()
+        .select("*")
         .eq(
           "id",
           playerId
-        );
+        )
+        .eq(
+          "room_code",
+          savedRoom
+        )
+        .maybeSingle();
+
+
+    if (!player) {
+
+      sessionStorage.removeItem(
+        "mr_reaper_room_code"
+      );
+
+
+      showScreen("entry");
+
+      online("READY");
+
+      return;
     }
 
-  } catch (err) {
+
+    currentRoom =
+      room;
+
+
+    currentPlayer =
+      player;
+
+
+    updateRoomCode(
+      room.code
+    );
+
+
+    updateRound(
+      room.round
+    );
+
+
+    await refreshPlayers();
+
+
+    await subscribeToRoom(
+      room.code
+    );
+
+
+    if (
+      room.state ===
+      "playing"
+    ) {
+
+      showScreen("game");
+
+    } else {
+
+      showScreen("lobby");
+    }
+
+
+    online(
+      "SESSION RESTORED"
+    );
+
+
+  } catch (error) {
+
     console.error(
-      "Leave error:",
-      err
+      "RESTORE ERROR:",
+      error
+    );
+
+
+    showScreen("entry");
+
+
+    errorStatus(
+      "Session could not be restored."
     );
   }
-
-  currentPlayer = null;
-  currentRoom = null;
-  isHost = false;
-  gameStarted = false;
-
-  clearSession();
-
-  showEntry();
-
-  setConnection(
-    "REAPER CONNECTION ONLINE"
-  );
 }
 
 
-/* =========================================================
-   HTML ESCAPE
-   ========================================================= */
+// =========================================================
+// INPUTS
+// =========================================================
 
-function escapeHTML(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+function setupInputs() {
 
-
-/* =========================================================
-   BUTTON BINDING
-   ========================================================= */
-
-function bindButton(ids, callback) {
-  ids.forEach(id => {
-    const el = $(id);
-
-    if (!el) return;
-
-    el.addEventListener(
-      "click",
+  $("roomCodeInput")
+    .addEventListener(
+      "input",
       event => {
-        event.preventDefault();
-        callback();
+
+        event.target.value =
+          event.target.value
+            .toUpperCase()
+            .replace(
+              /[^A-Z0-9]/g,
+              ""
+            )
+            .slice(0, 5);
       }
     );
-  });
-}
 
-function bindButtons() {
-  bindButton(
-    [
-      "createRoom",
-      "createBtn",
-      "createRoomBtn",
-      "create-room"
-    ],
-    createRoom
-  );
 
-  bindButton(
-    [
-      "joinRoom",
-      "joinBtn",
-      "joinRoomBtn",
-      "join-room"
-    ],
-    joinRoom
-  );
-
-  bindButton(
-    [
-      "startGame",
-      "startBtn",
-      "startButton",
-      "start-game"
-    ],
-    startGame
-  );
-
-  bindButton(
-    [
-      "leaveRoom",
-      "leaveBtn",
-      "leaveButton",
-      "leave-room"
-    ],
-    leaveRoom
-  );
-
-  /*
-    Enter key on room code.
-  */
-
-  const roomInput =
-    getRoomInput();
-
-  if (roomInput) {
-    roomInput.addEventListener(
-      "keydown",
+  $("playerNameInput")
+    .addEventListener(
+      "input",
       event => {
-        if (
-          ev
+
+        sessionStorage.setItem(
+          "mr_reaper_player_name",
+          event.target.value
+        );
+      }
+    );
+
+
+  $("roomCodeInput")
+    .addEventListener(
+      "keydown",
+      event 
