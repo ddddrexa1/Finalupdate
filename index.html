@@ -8,315 +8,580 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
 
-  <meta name="theme-color" content="#050505">
+  <meta
+    name="theme-color"
+    content="#050505"
+  >
+
+  <meta
+    name="description"
+    content="MR REAPER — The Elimination Game"
+  >
 
   <title>MR REAPER | The Elimination Game</title>
 
-  <link rel="stylesheet" href="game.css">
+  <!-- =================================================
+       GAME STYLES
+       ================================================= -->
+  <link
+    rel="stylesheet"
+    href="game.css"
+  >
 
-  <!-- Supabase -->
+  <!-- =================================================
+       SUPABASE
+       Must load BEFORE app.js
+       ================================================= -->
   <script
     src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
-    defer>
-  </script>
-
-  <!-- Our application -->
-  <script src="app.js" defer></script>
+  ></script>
 </head>
 
 <body>
 
-  <!-- =========================================================
-       SYSTEM STATUS
-  ========================================================== -->
+  <!-- =================================================
+       APPLICATION
+       ================================================= -->
 
-  <div id="systemStatus" class="system-status">
-    <span id="statusDot" class="status-dot"></span>
-    <span id="statusText">Starting...</span>
+  <main id="app">
 
-    <button
-      id="refreshBtn"
-      class="refresh-btn"
-      type="button"
-      aria-label="Refresh page"
+    <!-- =================================================
+         SYSTEM STATUS BAR
+         ================================================= -->
+
+    <div
+      id="systemStatus"
+      class="system-status"
+      aria-live="polite"
     >
-      ↻
-    </button>
-  </div>
 
+      <span
+        id="statusDot"
+        class="status-dot"
+      ></span>
 
-  <!-- =========================================================
-       ENTRY PAGE
-  ========================================================== -->
-
-  <main id="entryPage" class="page active">
-
-    <section class="hero">
-
-      <div class="skull">☠</div>
-
-      <h1>MR REAPER</h1>
-
-      <p class="subtitle">
-        THE ELIMINATION GAME
-      </p>
-
-      <div class="divider"></div>
-
-      <p class="intro-text">
-        Enter the game.<br>
-        Survive the rounds.<br>
-        Don't get eliminated.
-      </p>
-
-    </section>
-
-
-    <section class="card">
-
-      <h2>ENTER THE GAME</h2>
-
-      <label for="playerNameInput">
-        PLAYER NAME
-      </label>
-
-      <input
-        id="playerNameInput"
-        type="text"
-        maxlength="20"
-        autocomplete="off"
-        placeholder="Enter your name"
-      >
-
-      <button
-        id="createRoomBtn"
-        class="primary-btn"
-        type="button"
-      >
-        <span class="btn-text">CREATE ROOM</span>
-        <span class="btn-loader"></span>
-      </button>
-
-      <div class="or">
-        <span>OR</span>
-      </div>
-
-      <label for="roomCodeInput">
-        ROOM CODE
-      </label>
-
-      <input
-        id="roomCodeInput"
-        type="text"
-        maxlength="5"
-        autocomplete="off"
-        autocapitalize="characters"
-        placeholder="ABCDE"
-      >
-
-      <button
-        id="joinRoomBtn"
-        class="secondary-btn"
-        type="button"
-      >
-        <span class="btn-text">JOIN ROOM</span>
-        <span class="btn-loader"></span>
-      </button>
-
-      <div id="entryMessage" class="message"></div>
-
-    </section>
-
-  </main>
-
-
-  <!-- =========================================================
-       LOBBY PAGE
-  ========================================================== -->
-
-  <main id="lobbyPage" class="page">
-
-    <section class="lobby-header">
-
-      <div class="skull small">☠</div>
-
-      <p class="eyebrow">
-        MR REAPER
-      </p>
-
-      <h1>LOBBY</h1>
-
-      <p id="lobbyMessage" class="lobby-message">
-        Waiting for players...
-      </p>
-
-    </section>
-
-
-    <section class="room-code-card">
-
-      <span class="small-label">
-        ROOM CODE
+      <span id="statusText">
+        Connecting...
       </span>
 
-      <div
-        id="roomCodeDisplay"
-        class="room-code"
-      >
-        -----
-      </div>
-
       <button
-        id="copyRoomCodeBtn"
-        class="copy-btn"
+        id="refreshBtn"
+        class="refresh-btn"
         type="button"
+        aria-label="Refresh connection"
+        title="Refresh"
       >
-        COPY CODE
+        ↻
       </button>
+
+    </div>
+
+
+    <!-- =================================================
+         ENTRY PAGE
+         ================================================= -->
+
+    <section
+      id="entryPage"
+      class="page active"
+      aria-labelledby="entryTitle"
+    >
+
+      <div class="entry-container">
+
+        <!-- LOGO / TITLE -->
+
+        <div class="brand">
+
+          <div
+            class="brand-symbol"
+            aria-hidden="true"
+          >
+            ☠
+          </div>
+
+          <h1 id="entryTitle">
+            MR REAPER
+          </h1>
+
+          <p class="brand-subtitle">
+            THE ELIMINATION GAME
+          </p>
+
+        </div>
+
+
+        <!-- ENTRY CARD -->
+
+        <div class="card entry-card">
+
+          <div class="card-heading">
+
+            <span class="eyebrow">
+              PLAYER ENTRY
+            </span>
+
+            <h2>
+              Enter The Game
+            </h2>
+
+            <p>
+              Choose your identity and enter
+              the elimination arena.
+            </p>
+
+          </div>
+
+
+          <!-- PLAYER NAME -->
+
+          <div class="form-group">
+
+            <label
+              for="playerNameInput"
+            >
+              Player Name
+            </label>
+
+            <input
+              id="playerNameInput"
+              type="text"
+              placeholder="Enter your name"
+              maxlength="20"
+              autocomplete="nickname"
+              autocapitalize="words"
+              spellcheck="false"
+            >
+
+          </div>
+
+
+          <!-- CREATE ROOM -->
+
+          <button
+            id="createRoomBtn"
+            class="btn btn-primary"
+            type="button"
+          >
+
+            <span class="btn-text">
+              CREATE ROOM
+            </span>
+
+            <span
+              class="btn-loader"
+              aria-hidden="true"
+            ></span>
+
+          </button>
+
+
+          <div class="divider">
+
+            <span>
+              OR
+            </span>
+
+          </div>
+
+
+          <!-- JOIN ROOM -->
+
+          <div class="form-group">
+
+            <label
+              for="roomCodeInput"
+            >
+              Room Code
+            </label>
+
+            <input
+              id="roomCodeInput"
+              type="text"
+              placeholder="ABCDE"
+              maxlength="5"
+              inputmode="text"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+            >
+
+          </div>
+
+
+          <button
+            id="joinRoomBtn"
+            class="btn btn-secondary"
+            type="button"
+          >
+
+            <span class="btn-text">
+              JOIN ROOM
+            </span>
+
+            <span
+              class="btn-loader"
+              aria-hidden="true"
+            ></span>
+
+          </button>
+
+
+          <!-- ENTRY MESSAGE -->
+
+          <div
+            id="entryMessage"
+            class="message"
+            role="alert"
+            aria-live="polite"
+          ></div>
+
+        </div>
+
+
+        <!-- FOOTER -->
+
+        <p class="entry-footer">
+          <span>MR REAPER</span>
+          <span>•</span>
+          <span>ENTER AT YOUR OWN RISK</span>
+        </p>
+
+      </div>
 
     </section>
 
 
-    <section class="players-card">
+    <!-- =================================================
+         LOBBY PAGE
+         ================================================= -->
 
-      <div class="section-title-row">
+    <section
+      id="lobbyPage"
+      class="page"
+      aria-labelledby="lobbyTitle"
+    >
 
-        <h2>PLAYERS</h2>
+      <div class="lobby-container">
 
-        <span
-          id="playerCount"
-          class="player-count"
+        <!-- HEADER -->
+
+        <div class="lobby-header">
+
+          <div>
+
+            <span class="eyebrow">
+              THE LOBBY
+            </span>
+
+            <h1 id="lobbyTitle">
+              ROOM READY
+            </h1>
+
+          </div>
+
+          <div
+            id="playerCount"
+            class="player-count"
+          >
+            0
+          </div>
+
+        </div>
+
+
+        <!-- ROOM CODE CARD -->
+
+        <div class="card room-card">
+
+          <p class="room-label">
+            ROOM CODE
+          </p>
+
+          <div class="room-code-row">
+
+            <strong
+              id="roomCodeDisplay"
+              class="room-code"
+            >
+              -----
+            </strong>
+
+            <button
+              id="copyRoomCodeBtn"
+              class="icon-btn"
+              type="button"
+              aria-label="Copy room code"
+              title="Copy room code"
+            >
+              ⧉
+            </button>
+
+          </div>
+
+          <p class="room-hint">
+            Share this code with the players
+            you want in your room.
+          </p>
+
+        </div>
+
+
+        <!-- PLAYERS -->
+
+        <div class="card players-card">
+
+          <div class="section-header">
+
+            <div>
+
+              <span class="eyebrow">
+                PLAYERS
+              </span>
+
+              <h2>
+                Waiting Room
+              </h2>
+
+            </div>
+
+            <span
+              id="playerCount"
+              class="player-count-small"
+            >
+              0
+            </span>
+
+          </div>
+
+
+          <div
+            id="playersList"
+            class="players-list"
+          >
+
+            <div class="empty-players">
+              Waiting for players...
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- LOBBY MESSAGE -->
+
+        <div
+          id="lobbyMessage"
+          class="lobby-message"
+          aria-live="polite"
         >
-          0/30
-        </span>
-
-      </div>
-
-      <div
-        id="playersList"
-        class="players-list"
-      >
-        <div class="empty-players">
           Waiting for players...
         </div>
+
+
+        <!-- HOST START BUTTON -->
+
+        <button
+          id="startGameBtn"
+          class="btn btn-primary start-btn"
+          type="button"
+        >
+
+          <span class="btn-text">
+            START GAME
+          </span>
+
+          <span
+            class="btn-loader"
+            aria-hidden="true"
+          ></span>
+
+        </button>
+
+
+        <!-- LEAVE -->
+
+        <button
+          id="leaveRoomBtn"
+          class="btn btn-danger"
+          type="button"
+        >
+          LEAVE ROOM
+        </button>
+
       </div>
 
     </section>
 
 
-    <section class="lobby-actions">
+    <!-- =================================================
+         GAME PAGE
+         ================================================= -->
 
-      <button
-        id="startGameBtn"
-        class="primary-btn"
-        type="button"
-      >
-        <span class="btn-text">START GAME</span>
-        <span class="btn-loader"></span>
-      </button>
+    <section
+      id="gamePage"
+      class="page"
+      aria-labelledby="gameTitle"
+    >
 
-      <button
-        id="leaveRoomBtn"
-        class="danger-btn"
-        type="button"
-      >
-        <span class="btn-text">LEAVE ROOM</span>
-        <span class="btn-loader"></span>
-      </button>
+      <div class="game-container">
 
-    </section>
+        <!-- GAME HEADER -->
 
-  </main>
+        <header class="game-header">
 
+          <div class="game-brand">
 
-  <!-- =========================================================
-       GAME PAGE
-  ========================================================== -->
+            <span class="game-skull">
+              ☠
+            </span>
 
-  <main id="gamePage" class="page">
+            <div>
 
-    <header class="game-header">
+              <h1 id="gameTitle">
+                MR REAPER
+              </h1>
 
-      <div>
-        <span class="eyebrow">
-          MR REAPER
-        </span>
+              <p>
+                THE ELIMINATION GAME
+              </p>
 
-        <h1>
-          ROUND
-          <span id="roundDisplay">1</span>
-        </h1>
-      </div>
+            </div>
 
-      <div class="game-player-count">
-        <span>PLAYERS</span>
-        <strong id="gamePlayerCount">0</strong>
-      </div>
-
-    </header>
+          </div>
 
 
-    <section class="game-arena">
+          <div class="game-stats">
 
-      <div class="arena-warning">
-        ☠
-      </div>
+            <div class="game-stat">
 
-      <h2 id="gameTitle">
-        GAME STARTING
-      </h2>
+              <span>
+                ROUND
+              </span>
 
-      <p id="gameMessage">
-        Prepare yourself.
-      </p>
+              <strong id="roundDisplay">
+                ROUND 1
+              </strong>
 
-      <div class="game-status-light">
-        <span id="gameLight"></span>
-      </div>
+            </div>
 
-      <div class="arena-floor">
 
-        <div class="player-marker">
-          <span>YOU</span>
+            <div class="game-stat">
+
+              <span>
+                PLAYERS
+              </span>
+
+              <strong id="gamePlayerCount">
+                0 PLAYERS
+              </strong>
+
+            </div>
+
+          </div>
+
+        </header>
+
+
+        <!-- GAME MESSAGE -->
+
+        <div
+          id="gameMessage"
+          class="game-message"
+          aria-live="polite"
+        >
+          Prepare yourself.
+        </div>
+
+
+        <!-- GAME ARENA -->
+
+        <div
+          id="gameArena"
+          class="game-arena"
+        >
+
+          <div
+            id="gameLight"
+            class="game-light"
+            aria-label="Game light"
+          ></div>
+
+          <div class="arena-title">
+            MR REAPER
+          </div>
+
+          <div class="arena-subtitle">
+            THE GAME WILL BEGIN
+          </div>
+
+          <!-- Future multiplayer players
+               will be rendered here. -->
+
+          <div
+            id="gamePlayers"
+            class="game-players"
+          ></div>
+
+        </div>
+
+
+        <!-- GAME CONTROLS -->
+
+        <div class="game-controls">
+
+          <button
+            id="gameLobbyBtn"
+            class="btn btn-secondary"
+            type="button"
+          >
+            LOBBY
+          </button>
+
+          <button
+            id="gameLeaveBtn"
+            class="btn btn-danger"
+            type="button"
+          >
+            LEAVE GAME
+          </button>
+
         </div>
 
       </div>
 
     </section>
 
-
-    <section class="game-actions">
-
-      <button
-        id="gameLobbyBtn"
-        class="secondary-btn"
-        type="button"
-      >
-        RETURN TO LOBBY
-      </button>
-
-      <button
-        id="gameLeaveBtn"
-        class="danger-btn"
-        type="button"
-      >
-        LEAVE GAME
-      </button>
-
-    </section>
-
   </main>
 
 
-  <!-- =========================================================
-       GLOBAL TOAST
-  ========================================================== -->
+  <!-- =================================================
+       TOAST
+       ================================================= -->
 
   <div
     id="toast"
     class="toast"
+    role="status"
     aria-live="polite"
+    aria-atomic="true"
   ></div>
 
+
+  <!-- =================================================
+       APPLICATION JAVASCRIPT
+       
+       IMPORTANT:
+       Supabase loads first.
+       app.js loads second.
+       defer ensures DOM is available.
+       ================================================= -->
+
+  <script
+    src="app.js"
+    defer
+  ></script>
+
 </body>
-</html>
+            </html>
