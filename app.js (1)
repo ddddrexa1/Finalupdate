@@ -2030,3 +2030,693 @@ async function startGame() {
     setButtonLoading(startGameBtn, false);
   }
 }
+// =====================================================
+// SHOW GAME SCREEN
+// =====================================================
+
+function showGameScreen(room, players) {
+  currentRoom = room;
+
+  roundDisplay.textContent =
+    `ROUND ${room.round || 1}`;
+
+  gamePlayerCount.textContent =
+    `${players.length} PLAYER${players.length === 1 ? "" : "S"}`;
+
+  gameTitle.textContent = "GAME STARTING";
+
+  gameMessage.textContent =
+    "Prepare yourself. The first round is about to begin.";
+
+  gameLight.className = "game-light";
+
+  showPage(gamePage);
+}
+
+
+// =====================================================
+// LEAVE ROOM
+// =====================================================
+
+async function leaveRoom() {
+  if (!currentPlayer || !currentRoom) {
+    clearSession();
+    showPage(entryPage);
+    return;
+  }
+
+  const playerId = currentPlayer.id;
+  const roomCode = currentRoom.code;
+
+  try {
+    setStatus("Leaving room...", "loading");
+
+    const { error } = await supabaseClient
+      .from("players")
+      .delete()
+      .eq("id", playerId)
+      .eq("room_code", roomCode);
+
+    if (error) throw error;
+
+    const remainingPlayers = await getPlayers(roomCode);
+
+    if (remainingPlayers.length === 0) {
+      await supabaseClient
+        .from("rooms")
+        .delete()
+        .eq("code", roomCode);
+    } else if (currentRoom.host_id === playerId) {
+      await supabaseClient
+        .from("rooms")
+        .update({
+          host_id: remainingPlayers[0].id
+        })
+        .eq("code", roomCode);
+    }
+
+    await unsubscribeRoom();
+
+    clearSession();
+
+    currentPlayer = null;
+    currentRoom = null;
+
+    showPage(entryPage);
+    setStatus("Ready", "online");
+    showToast("You left the room.");
+
+  } catch (error) {
+    console.error("LEAVE ROOM ERROR:", error);
+
+    showToast(readableDatabaseError(error));
+    setStatus("Room realtime online", "online");
+  }
+}
+
+
+// =====================================================
+// LEAVE GAME
+// =====================================================
+
+async function leaveGame() {
+  if (!currentPlayer || !currentRoom) {
+    clearSession();
+    showPage(entryPage);
+    return;
+  }
+
+  const playerId = currentPlayer.id;
+  const roomCode = currentRoom.code;
+
+  try {
+    setStatus("Leaving game...", "loading");
+
+    const { error } = await supabaseClient
+      .from("players")
+      .delete()
+      .eq("id", playerId)
+      .eq("room_code", roomCode);
+
+    if (error) throw error;
+
+    const remainingPlayers = await getPlayers(roomCode);
+
+    if (remainingPlayers.length === 0) {
+      await supabaseClient
+        .from("rooms")
+        .delete()
+        .eq("code", roomCode);
+    } else if (currentRoom.host_id === playerId) {
+      await supabaseClient
+        .from("rooms")
+        .update({
+          host_id: remainingPlayers[0].id
+        })
+        .eq("code", roomCode);
+    }
+
+    await unsubscribeRoom();
+
+    clearSession();
+
+    currentPlayer = null;
+    currentRoom = null;
+
+    showPage(entryPage);
+    setStatus("Ready", "online");
+    showToast("You left the game.");
+
+  } catch (error) {
+    console.error("LEAVE GAME ERROR:", error);
+
+    showToast(readableDatabaseError(error));
+    setStatus("GAME ONLINE", "online");
+  }
+}
+
+
+// =====================================================
+// RETURN TO LOBBY
+// =====================================================
+
+async function returnToLobby() {
+  if (!currentRoom) {
+    showPage(entryPage);
+    return;
+  }
+
+  try {
+    const room = await getRoom(currentRoom.code);
+
+    if (!room) {
+      clearSession();
+      showPage(entryPage);
+      return;
+    }
+
+    const players = await getPlayers(room.code);
+
+    currentRoom = room;
+
+    updateRoomUI(room, players);
+
+    showPage(lobbyPage);
+
+  } catch (error) {
+    console.error("RETURN TO LOBBY ERROR:", error);
+
+    showToast(readableDatabaseError(error));
+  }
+}
+
+
+// =====================================================
+// SUBSCRIBE TO ROOM REALTIME
+// =====================================================
+
+async function subscribeToRoom(code) {
+  if (!supabaseClient || !code) {
+    return;
+  }
+
+  await unsubscribeRoom();
+
+  const channelName = `mr-reaper-room-${code}`;
+
+  roomChannel = supabaseClient.channel(channelName);
+
+  roomChannel
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "players",
+        filter: `room_code=eq.${code}`
+      },
+      () => {
+        handleRealtimeUpdate();
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "rooms",
+        filter: `code=eq.${code}`
+      },
+      () => {
+        handleRealtimeUpdate();
+      }
+    )
+    .subscribe((status) => {
+
+      if (status === "SUBSCRIBED") {
+        setStatus(
+          "Room realtime online",
+          "online"
+        );
+      }
+
+      if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT"
+      ) {
+        setStatus(
+          "Realtime connection issue",
+          "error"
+        );
+      }
+    });
+}
+
+
+// =====================================================
+// HANDLE REALTIME UPDATE
+// =====================================================
+
+let realtimeRefreshTimer = null;
+
+async function handleRealtimeUpdate() {
+  if (!currentRoom) {
+    return;
+  }
+
+  clearTimeout(realtimeRefreshTimer);
+
+  realtimeRefreshTimer = setTimeout(async () => {
+
+    try {
+      const room = await getRoom(currentRoom.code);
+
+      if (!room) {
+        await unsubscribeRoom();
+
+        clearSession();
+
+        currentPlayer = null;
+        currentRoom = null;
+
+        showPage(entryPage);
+
+        showEntryMessage(
+          "The room has been closed."
+        );
+
+        setStatus("Ready", "online");
+
+        return;
+      }
+
+      const players = await getPlayers(room.code);
+
+      currentRoom = room;
+
+      updateRoomUI(room, players);
+
+      if (room.state === "playing") {
+        showGameScreen(room, players);
+      } else {
+        showPage(lobbyPage);
+      }
+
+    } catch (error) {
+      console.error(
+        "REALTIME UPDATE ERROR:",
+        error
+      );
+    }
+
+  }, 150);
+}
+
+
+// =====================================================
+// UNSUBSCRIBE ROOM
+// =====================================================
+
+async function unsubscribeRoom() {
+  if (!supabaseClient || !roomChannel) {
+    return;
+  }
+
+  try {
+    await supabaseClient.removeChannel(roomChannel);
+  } catch (error) {
+    console.error(
+      "UNSUBSCRIBE ERROR:",
+      error
+    );
+  }
+
+  roomChannel = null;
+}
+
+
+// =====================================================
+// CLEAR SESSION
+// =====================================================
+
+function clearSession() {
+  sessionStorage.removeItem(
+    STORAGE.roomCode
+  );
+
+  sessionStorage.removeItem(
+    STORAGE.playerName
+  );
+}
+
+
+// =====================================================
+// RESTORE SESSION
+// =====================================================
+
+async function restoreSession() {
+  const savedRoomCode =
+    getSavedRoomCode();
+
+  const savedName =
+    sessionStorage.getItem(
+      STORAGE.playerName
+    );
+
+  const playerId =
+    sessionStorage.getItem(
+      STORAGE.playerId
+    );
+
+  if (
+    !savedRoomCode ||
+    !savedName ||
+    !playerId
+  ) {
+    showPage(entryPage);
+    setStatus("Ready", "online");
+    return;
+  }
+
+  try {
+    setStatus(
+      "Restoring room...",
+      "loading"
+    );
+
+    const room =
+      await getRoom(savedRoomCode);
+
+    if (!room) {
+      clearSession();
+      showPage(entryPage);
+      setStatus("Ready", "online");
+      return;
+    }
+
+    const {
+      data: player,
+      error
+    } = await supabaseClient
+      .from("players")
+      .select("*")
+      .eq("id", playerId)
+      .eq("room_code", savedRoomCode)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!player) {
+      clearSession();
+      showPage(entryPage);
+      setStatus("Ready", "online");
+      return;
+    }
+
+    currentPlayer = player;
+    currentRoom = room;
+
+    playerNameInput.value = savedName;
+
+    const players =
+      await getPlayers(room.code);
+
+    updateRoomUI(
+      room,
+      players
+    );
+
+    await subscribeToRoom(
+      room.code
+    );
+
+    if (room.state === "playing") {
+      showGameScreen(
+        room,
+        players
+      );
+    } else {
+      showPage(lobbyPage);
+    }
+
+    setStatus(
+      "Room realtime online",
+      "online"
+    );
+
+  } catch (error) {
+    console.error(
+      "RESTORE SESSION ERROR:",
+      error
+    );
+
+    clearSession();
+
+    currentPlayer = null;
+    currentRoom = null;
+
+    showPage(entryPage);
+
+    setStatus(
+      "Ready",
+      "online"
+    );
+  }
+}
+
+
+// =====================================================
+// COPY ROOM CODE
+// =====================================================
+
+async function copyRoomCode() {
+  if (!currentRoom) {
+    return;
+  }
+
+  const code = currentRoom.code;
+
+  try {
+    if (
+      navigator.clipboard &&
+      window.isSecureContext
+    ) {
+      await navigator.clipboard.writeText(code);
+    } else {
+      const textArea =
+        document.createElement("textarea");
+
+      textArea.value = code;
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+
+      document.body.appendChild(textArea);
+
+      textArea.focus();
+      textArea.select();
+
+      document.execCommand("copy");
+
+      textArea.remove();
+    }
+
+    showToast(
+      `Room code ${code} copied`
+    );
+
+  } catch (error) {
+    console.error(
+      "COPY ERROR:",
+      error
+    );
+
+    showToast(
+      "Could not copy room code."
+    );
+  }
+}
+
+
+// =====================================================
+// INPUT SETUP
+// =====================================================
+
+function setupInputs() {
+
+  roomCodeInput.addEventListener(
+    "input",
+    () => {
+      roomCodeInput.value =
+        roomCodeInput.value
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "")
+          .slice(0, 5);
+    }
+  );
+
+
+  playerNameInput.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        createRoom();
+      }
+    }
+  );
+
+
+  roomCodeInput.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        joinRoom();
+      }
+    }
+  );
+}
+
+
+// =====================================================
+// BUTTON SETUP
+// =====================================================
+
+function setupButtons() {
+
+  createRoomBtn.addEventListener(
+    "click",
+    createRoom
+  );
+
+  joinRoomBtn.addEventListener(
+    "click",
+    joinRoom
+  );
+
+  startGameBtn.addEventListener(
+    "click",
+    startGame
+  );
+
+  leaveRoomBtn.addEventListener(
+    "click",
+    leaveRoom
+  );
+
+  gameLeaveBtn.addEventListener(
+    "click",
+    leaveGame
+  );
+
+  gameLobbyBtn.addEventListener(
+    "click",
+    returnToLobby
+  );
+
+  copyRoomCodeBtn.addEventListener(
+    "click",
+    copyRoomCode
+  );
+
+
+  refreshBtn.addEventListener(
+    "click",
+    async () => {
+
+      refreshBtn.classList.add(
+        "spinning"
+      );
+
+      try {
+
+        if (currentRoom) {
+          await refreshCurrentRoom();
+        } else {
+          setStatus(
+            "Ready",
+            "online"
+          );
+        }
+
+      } finally {
+
+        setTimeout(() => {
+          refreshBtn.classList.remove(
+            "spinning"
+          );
+        }, 400);
+
+      }
+    }
+  );
+}
+
+
+// =====================================================
+// BOOT
+// =====================================================
+
+async function boot() {
+
+  setupButtons();
+
+  setupInputs();
+
+  // Show entry page immediately.
+  // Do not wait for Supabase.
+  showPage(entryPage);
+
+  setStatus(
+    "Connecting...",
+    "loading"
+  );
+
+  try {
+
+    initializeSupabase();
+
+    // Restore session in the background.
+    await restoreSession();
+
+  } catch (error) {
+
+    console.error(
+      "BOOT ERROR:",
+      error
+    );
+
+    showPage(entryPage);
+
+    setStatus(
+      "Connection error",
+      "error"
+    );
+
+    showEntryMessage(
+      readableDatabaseError(error)
+    );
+  }
+}
+
+
+// =====================================================
+// START APPLICATION
+// =====================================================
+
+if (
+  document.readyState === "loading"
+) {
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    boot
+  );
+
+} else {
+
+  boot();
+
+}
