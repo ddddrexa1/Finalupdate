@@ -20,18 +20,12 @@
 
   <title>MR REAPER | The Elimination Game</title>
 
-  <!-- =================================================
-       GAME STYLES
-       ================================================= -->
   <link
     rel="stylesheet"
-    href="game.css"
+    href="./game.css"
   >
 
-  <!-- =================================================
-       SUPABASE
-       Must load BEFORE app.js
-       ================================================= -->
+  <!-- Supabase MUST load before app.js -->
   <script
     src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
   ></script>
@@ -39,14 +33,10 @@
 
 <body>
 
-  <!-- =================================================
-       APPLICATION
-       ================================================= -->
-
   <main id="app">
 
     <!-- =================================================
-         SYSTEM STATUS BAR
+         SYSTEM STATUS
          ================================================= -->
 
     <div
@@ -61,7 +51,7 @@
       ></span>
 
       <span id="statusText">
-        Connecting...
+        Ready
       </span>
 
       <button
@@ -69,7 +59,6 @@
         class="refresh-btn"
         type="button"
         aria-label="Refresh connection"
-        title="Refresh"
       >
         ↻
       </button>
@@ -84,12 +73,9 @@
     <section
       id="entryPage"
       class="page active"
-      aria-labelledby="entryTitle"
     >
 
       <div class="entry-container">
-
-        <!-- LOGO / TITLE -->
 
         <div class="brand">
 
@@ -100,7 +86,7 @@
             ☠
           </div>
 
-          <h1 id="entryTitle">
+          <h1>
             MR REAPER
           </h1>
 
@@ -110,8 +96,6 @@
 
         </div>
 
-
-        <!-- ENTRY CARD -->
 
         <div class="card entry-card">
 
@@ -137,9 +121,7 @@
 
           <div class="form-group">
 
-            <label
-              for="playerNameInput"
-            >
+            <label for="playerNameInput">
               Player Name
             </label>
 
@@ -177,21 +159,15 @@
 
 
           <div class="divider">
-
-            <span>
-              OR
-            </span>
-
+            <span>OR</span>
           </div>
 
 
-          <!-- JOIN ROOM -->
+          <!-- ROOM CODE -->
 
           <div class="form-group">
 
-            <label
-              for="roomCodeInput"
-            >
+            <label for="roomCodeInput">
               Room Code
             </label>
 
@@ -208,6 +184,8 @@
 
           </div>
 
+
+          <!-- JOIN ROOM -->
 
           <button
             id="joinRoomBtn"
@@ -227,7 +205,7 @@
           </button>
 
 
-          <!-- ENTRY MESSAGE -->
+          <!-- ERROR / STATUS -->
 
           <div
             id="entryMessage"
@@ -238,8 +216,6 @@
 
         </div>
 
-
-        <!-- FOOTER -->
 
         <p class="entry-footer">
           <span>MR REAPER</span>
@@ -259,12 +235,9 @@
     <section
       id="lobbyPage"
       class="page"
-      aria-labelledby="lobbyTitle"
     >
 
       <div class="lobby-container">
-
-        <!-- HEADER -->
 
         <div class="lobby-header">
 
@@ -274,23 +247,16 @@
               THE LOBBY
             </span>
 
-            <h1 id="lobbyTitle">
+            <h1>
               ROOM READY
             </h1>
 
           </div>
 
-          <div
-            id="playerCount"
-            class="player-count"
-          >
-            0
-          </div>
-
         </div>
 
 
-        <!-- ROOM CODE CARD -->
+        <!-- ROOM CODE -->
 
         <div class="card room-card">
 
@@ -312,7 +278,6 @@
               class="icon-btn"
               type="button"
               aria-label="Copy room code"
-              title="Copy room code"
             >
               ⧉
             </button>
@@ -369,8 +334,6 @@
         </div>
 
 
-        <!-- LOBBY MESSAGE -->
-
         <div
           id="lobbyMessage"
           class="lobby-message"
@@ -380,7 +343,7 @@
         </div>
 
 
-        <!-- HOST START BUTTON -->
+        <!-- START -->
 
         <button
           id="startGameBtn"
@@ -422,12 +385,9 @@
     <section
       id="gamePage"
       class="page"
-      aria-labelledby="gameTitle"
     >
 
       <div class="game-container">
-
-        <!-- GAME HEADER -->
 
         <header class="game-header">
 
@@ -466,7 +426,6 @@
 
             </div>
 
-
             <div class="game-stat">
 
               <span>
@@ -483,8 +442,6 @@
 
         </header>
 
-
-        <!-- GAME MESSAGE -->
 
         <div
           id="gameMessage"
@@ -505,7 +462,6 @@
           <div
             id="gameLight"
             class="game-light"
-            aria-label="Game light"
           ></div>
 
           <div class="arena-title">
@@ -516,9 +472,6 @@
             THE GAME WILL BEGIN
           </div>
 
-          <!-- Future multiplayer players
-               will be rendered here. -->
-
           <div
             id="gamePlayers"
             class="game-players"
@@ -526,8 +479,6 @@
 
         </div>
 
-
-        <!-- GAME CONTROLS -->
 
         <div class="game-controls">
 
@@ -570,18 +521,18 @@
 
 
   <!-- =================================================
-       APPLICATION JAVASCRIPT
-       
-       IMPORTANT:
-       Supabase loads first.
-       app.js loads second.
-       defer ensures DOM is available.
+       APP.JS
        ================================================= -->
 
   <script
-    src="app.js"
+    src="./app.js"
     defer
+    onerror="
+      document.getElementById('statusText').textContent='APP.JS FAILED TO LOAD';
+      document.getElementById('statusDot').classList.add('error');
+      document.getElementById('entryMessage').textContent='app.js could not be loaded. Check that app.js is in the same folder as index.html.';
+    "
   ></script>
 
 </body>
-            </html>
+  </html>
