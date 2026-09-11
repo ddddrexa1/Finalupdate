@@ -1,40 +1,289 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>MR REAPER | The Elimination Game</title>
-<link rel="stylesheet" href="game.css">
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  >
+
+  <title>MR REAPER | The Elimination Game</title>
+
+  <link rel="stylesheet" href="game.css">
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+    defer
+  ></script>
+
+  <script src="app.js" defer></script>
 </head>
+
 <body>
-<div id="toast" class="toast"></div>
-<div id="app">
-<section id="loginScreen" class="screen active">
-  <div class="skull">☠</div><h1>MR REAPER</h1><p class="subtitle">THE ELIMINATION GAME</p>
-  <div class="card">
-    <input id="playerName" maxlength="20" placeholder="PLAYER NAME" autocomplete="off">
-    <button id="createBtn" class="primary">CREATE ROOM</button>
-    <div class="or">OR JOIN</div>
-    <div class="joinRow"><input id="roomCodeInput" maxlength="5" placeholder="ROOM CODE" autocomplete="off"><button id="joinBtn">JOIN</button></div>
-    <div id="statusText" class="status">REAPER CONNECTION: CHECKING</div>
+
+  <!-- =====================================================
+       SYSTEM STATUS
+       ===================================================== -->
+
+  <div id="systemStatus" class="system-status">
+    <span id="statusDot"></span>
+    <span id="statusText">Connecting...</span>
   </div>
-</section>
-<section id="lobbyScreen" class="screen">
-  <header><b>MR REAPER</b><span id="lobbyCode">-----</span></header>
-  <div class="card"><h2>LOBBY</h2><div class="code" id="roomCodeDisplay">-----</div><button id="copyCodeBtn">COPY ROOM CODE</button><div id="playerList" class="players"></div><button id="startBtn" class="primary">START GAME</button><button id="leaveBtn">LEAVE ROOM</button><p id="lobbyStatus" class="status">Waiting for players...</p></div>
-</section>
-<section id="gameScreen" class="screen gameScreen">
-  <header><span>ROUND <b id="roundDisplay">1</b></span><span id="gameCode">-----</span><span>ALIVE <b id="aliveCount">0</b></span></header>
-  <div class="gameWrap">
-    <div class="hud"><span id="phaseLabel">GET READY</span><span id="timerLabel">--</span></div>
-    <div id="arena" class="arena"><div id="finishLine"></div><div id="doll">◉</div><div id="playersArena"></div></div>
-    <div id="controls" class="controls"><button data-key="up">▲</button><div><button data-key="left">◀</button><button data-key="down">▼</button><button data-key="right">▶</button></div></div>
-    <div class="gameActions"><button id="micBtn">🎙 MIC OFF</button><button id="spectateBtn" class="hidden">SPECTATE</button><button id="leaveGameBtn">LEAVE</button></div>
-  </div>
-</section>
-<section id="spectateScreen" class="screen"><header><b>SPECTATOR</b><span id="spectateCode">-----</span></header><div class="card"><h2>YOU ARE OUT</h2><p>Watch the remaining players.</p><div id="spectateList" class="players"></div><button id="returnLoginBtn">RETURN TO LOGIN</button></div></section>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js"></script>
+
+
+  <!-- =====================================================
+       REFRESH
+       ===================================================== -->
+
+  <button
+    id="refreshBtn"
+    class="refresh-btn"
+    type="button"
+  >
+    ↻ Refresh
+  </button>
+
+
+  <!-- =====================================================
+       ENTRY PAGE
+       ===================================================== -->
+
+  <section id="entryPage" class="screen active">
+
+    <div class="entry-container">
+
+      <div class="skull">☠</div>
+
+      <h1>MR REAPER</h1>
+
+      <p class="subtitle">
+        THE ELIMINATION GAME
+      </p>
+
+      <div class="divider"></div>
+
+
+      <div class="input-group">
+
+        <label for="playerNameInput">
+          PLAYER NAME
+        </label>
+
+        <input
+          id="playerNameInput"
+          type="text"
+          maxlength="20"
+          autocomplete="off"
+          placeholder="Enter your name"
+        >
+
+      </div>
+
+
+      <button
+        id="createRoomBtn"
+        class="game-btn primary"
+        type="button"
+      >
+        CREATE ROOM
+      </button>
+
+
+      <div class="or">
+        OR
+      </div>
+
+
+      <div class="input-group">
+
+        <label for="roomCodeInput">
+          ROOM CODE
+        </label>
+
+        <input
+          id="roomCodeInput"
+          type="text"
+          maxlength="5"
+          autocomplete="off"
+          placeholder="ABCDE"
+        >
+
+      </div>
+
+
+      <button
+        id="joinRoomBtn"
+        class="game-btn"
+        type="button"
+      >
+        JOIN ROOM
+      </button>
+
+
+      <p class="game-info">
+        2–30 PLAYERS
+      </p>
+
+    </div>
+
+  </section>
+
+
+  <!-- =====================================================
+       LOBBY PAGE
+       ===================================================== -->
+
+  <section id="lobbyPage" class="screen">
+
+    <div class="lobby-container">
+
+      <div class="skull small">
+        ☠
+      </div>
+
+      <h2>
+        ROOM LOBBY
+      </h2>
+
+
+      <div class="room-card">
+
+        <span class="room-label">
+          ROOM CODE
+        </span>
+
+        <strong id="roomCodeDisplay">
+          -----
+        </strong>
+
+      </div>
+
+
+      <div class="player-count">
+
+        <span id="playerCount">
+          0
+        </span>
+
+        PLAYERS
+      </div>
+
+
+      <div
+        id="playersList"
+        class="players-list"
+      >
+        <div class="empty-players">
+          Waiting for players...
+        </div>
+      </div>
+
+
+      <button
+        id="startGameBtn"
+        class="game-btn primary"
+        type="button"
+      >
+        START GAME
+      </button>
+
+
+      <button
+        id="leaveRoomBtn"
+        class="game-btn danger"
+        type="button"
+      >
+        LEAVE ROOM
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- =====================================================
+       GAME PAGE
+       ===================================================== -->
+
+  <section id="gamePage" class="screen">
+
+    <div class="game-container">
+
+      <div class="skull game-skull">
+        ☠
+      </div>
+
+      <h1>
+        MR REAPER
+      </h1>
+
+      <p class="game-state">
+        THE GAME HAS BEGUN
+      </p>
+
+
+      <div class="game-panel">
+
+        <div class="game-panel-title">
+          ROUND
+        </div>
+
+        <div
+          id="roundDisplay"
+          class="round-number"
+        >
+          1
+        </div>
+
+      </div>
+
+
+      <div class="game-panel">
+
+        <div class="game-panel-title">
+          PLAYERS
+        </div>
+
+        <div
+          id="gamePlayerCount"
+          class="round-number"
+        >
+          0
+        </div>
+
+      </div>
+
+
+      <div
+        id="gameMessage"
+        class="game-message"
+      >
+        Prepare yourself...
+      </div>
+
+
+      <button
+        id="gameLobbyBtn"
+        class="game-btn"
+        type="button"
+      >
+        BACK TO LOBBY
+      </button>
+
+
+      <button
+        id="gameLeaveBtn"
+        class="game-btn danger"
+        type="button"
+      >
+        LEAVE GAME
+      </button>
+
+    </div>
+
+  </section>
+
+
 </body>
 </html>
