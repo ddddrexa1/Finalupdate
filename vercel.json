@@ -1,5 +1,3 @@
 {
-  "functions": {
-    "api/ws.js": {}
-  }
+  "version": 2
 }
