@@ -1,0 +1,7 @@
+{
+  "name":"mr-reaper-game",
+  "version":"2.0.0",
+  "private":true,
+  "type":"module",
+  "dependencies":{"express":"^5.1.0","ws":"^8.18.0"}
+}
