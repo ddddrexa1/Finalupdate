@@ -1,4 +1,4 @@
-/* =========================================================
+LP/* =========================================================
    MR REAPER
    THE ELIMINATION GAME
 
@@ -1228,4 +1228,805 @@ async function startGame() {
 
 /* =========================================================
    SHOW GAME SCREEN
-=
+========================================================= */
+
+function showGameScreen(room, players) {
+
+  currentRoom = room;
+
+  roundDisplay.textContent =
+    room.round || 1;
+
+  gamePlayerCount.textContent =
+    players.length;
+
+  gameTitle.textContent =
+    "GAME STARTING";
+
+  gameMessage.textContent =
+    "Prepare yourself. The first round is about to begin.";
+
+  gameLight.className = "";
+
+  showPage(gamePage);
+}
+
+
+/* =========================================================
+   LEAVE ROOM
+========================================================= */
+
+async function leaveRoom() {
+
+  if (
+    !supabaseClient ||
+    !currentPlayer ||
+    !currentRoom
+  ) {
+
+    clearSession();
+
+    showPage(entryPage);
+
+    return;
+  }
+
+  setButtonLoading(
+    leaveRoomBtn,
+    true
+  );
+
+  try {
+
+    const playerId =
+      currentPlayer.id;
+
+    const roomCode =
+      currentRoom.code;
+
+    const {
+      error: playerError
+    } =
+      await supabaseClient
+        .from("players")
+        .delete()
+        .eq("id", playerId)
+        .eq("room_code", roomCode);
+
+    if (playerError) {
+      throw playerError;
+    }
+
+    const remaining =
+      await getPlayers(roomCode);
+
+    if (remaining.length === 0) {
+
+      await supabaseClient
+        .from("rooms")
+        .delete()
+        .eq("code", roomCode);
+
+    } else if (
+      currentRoom.host_id === playerId
+    ) {
+
+      const newHost =
+        remaining[0];
+
+      const {
+        error
+      } =
+        await supabaseClient
+          .from("rooms")
+          .update({
+            host_id: newHost.id
+          })
+          .eq("code", roomCode);
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    unsubscribeRoom();
+
+    clearSession();
+
+    currentPlayer = null;
+
+    currentRoom = null;
+
+    showPage(entryPage);
+
+    playerNameInput.value = "";
+
+    roomCodeInput.value = "";
+
+    showEntryMessage(
+      "You left the room.",
+      "success"
+    );
+
+    setSystemStatus(
+      "Connection ready",
+      "online"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Leave room failed:",
+      error
+    );
+
+    showToast(
+      readableDatabaseError(error),
+      "error"
+    );
+
+  } finally {
+
+    setButtonLoading(
+      leaveRoomBtn,
+      false
+    );
+  }
+}
+
+
+/* =========================================================
+   LEAVE GAME
+========================================================= */
+
+async function leaveGame() {
+
+  if (
+    !currentPlayer ||
+    !currentRoom
+  ) {
+    return;
+  }
+
+  setButtonLoading(
+    gameLeaveBtn,
+    true
+  );
+
+  try {
+
+    const playerId =
+      currentPlayer.id;
+
+    const roomCode =
+      currentRoom.code;
+
+    const {
+      error
+    } =
+      await supabaseClient
+        .from("players")
+        .delete()
+        .eq("id", playerId)
+        .eq("room_code", roomCode);
+
+    if (error) {
+      throw error;
+    }
+
+    const remaining =
+      await getPlayers(roomCode);
+
+    if (remaining.length === 0) {
+
+      await supabaseClient
+        .from("rooms")
+        .delete()
+        .eq("code", roomCode);
+
+    } else if (
+      currentRoom.host_id === playerId
+    ) {
+
+      const {
+        error: hostError
+      } =
+        await supabaseClient
+          .from("rooms")
+          .update({
+            host_id: remaining[0].id
+          })
+          .eq("code", roomCode);
+
+      if (hostError) {
+        throw hostError;
+      }
+    }
+
+    unsubscribeRoom();
+
+    clearSession();
+
+    currentPlayer = null;
+
+    currentRoom = null;
+
+    showPage(entryPage);
+
+    playerNameInput.value = "";
+
+    roomCodeInput.value = "";
+
+    showEntryMessage(
+      "You left the game.",
+      "success"
+    );
+
+    setSystemStatus(
+      "Connection ready",
+      "online"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Leave game failed:",
+      error
+    );
+
+    showToast(
+      readableDatabaseError(error),
+      "error"
+    );
+
+  } finally {
+
+    setButtonLoading(
+      gameLeaveBtn,
+      false
+    );
+  }
+}
+
+
+/* =========================================================
+   RETURN TO LOBBY
+========================================================= */
+
+async function returnToLobby() {
+
+  if (!currentRoom) {
+
+    showPage(entryPage);
+
+    return;
+  }
+
+  try {
+
+    const room =
+      await getRoom(
+        currentRoom.code
+      );
+
+    if (!room) {
+
+      clearSession();
+
+      currentRoom = null;
+
+      currentPlayer = null;
+
+      showPage(entryPage);
+
+      return;
+    }
+
+    const players =
+      await getPlayers(
+        room.code
+      );
+
+    currentRoom = room;
+
+    updateRoomUI(
+      room,
+      players
+    );
+
+    showPage(lobbyPage);
+
+  } catch (error) {
+
+    console.error(
+      "Return to lobby failed:",
+      error
+    );
+
+    showToast(
+      readableDatabaseError(error),
+      "error"
+    );
+  }
+}
+
+
+/* =========================================================
+   REALTIME ROOM SUBSCRIPTION
+========================================================= */
+
+function subscribeToRoom(code) {
+
+  unsubscribeRoom();
+
+  if (
+    !supabaseClient ||
+    !code
+  ) {
+    return;
+  }
+
+  const channelName =
+    `mr-reaper-room-${code}`;
+
+  roomChannel =
+    supabaseClient
+      .channel(channelName)
+
+      /* PLAYER CHANGES */
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "players",
+          filter: `room_code=eq.${code}`
+        },
+        async () => {
+
+          await handleRealtimeUpdate();
+        }
+      )
+
+      // =====================================================
+// ROOM FUNCTIONS
+// =====================================================
+
+async function getRoom(code) {
+  const { data, error } = await supabaseClient
+    .from("rooms")
+    .select("*")
+    .eq("code", code)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data;
+}
+
+async function getPlayers(code) {
+  const { data, error } = await supabaseClient
+    .from("players")
+    .select("*")
+    .eq("room_code", code)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  return data || [];
+}
+
+
+// =====================================================
+// CREATE ROOM
+// =====================================================
+
+async function createRoom() {
+  const name = validateName();
+
+  if (!name) return;
+
+  const playerId = getOrCreatePlayerId();
+
+  setButtonLoading(createRoomBtn, true);
+  setStatus("Creating room...", "loading");
+  showEntryMessage("");
+
+  try {
+    let room = null;
+    let lastError = null;
+
+    // Try several times in case a generated room code already exists.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generateRoomCode();
+
+      const { data, error } = await supabaseClient
+        .from("rooms")
+        .insert({
+          code: code,
+          host_id: playerId,
+          state: "lobby",
+          round: 0
+        })
+        .select()
+        .single();
+
+      if (!error) {
+        room = data;
+        break;
+      }
+
+      lastError = error;
+
+      // Duplicate room code — generate another one.
+      if (error.code !== "23505") {
+        throw error;
+      }
+    }
+
+    if (!room) {
+      throw lastError || new Error("Could not create room.");
+    }
+
+    // Add the host as the first player.
+    const { error: playerError } = await supabaseClient
+      .from("players")
+      .upsert(
+        {
+          id: playerId,
+          room_code: room.code,
+          name: name,
+          status: "alive"
+        },
+        {
+          onConflict: "id"
+        }
+      );
+
+    if (playerError) {
+      // Don't leave an empty room behind.
+      await supabaseClient
+        .from("rooms")
+        .delete()
+        .eq("code", room.code);
+
+      throw playerError;
+    }
+
+    currentPlayer = {
+      id: playerId,
+      name: name,
+      status: "alive"
+    };
+
+    currentRoom = room;
+
+    savePlayerName(name);
+    saveRoomCode(room.code);
+
+    await refreshCurrentRoom();
+    await subscribeToRoom(room.code);
+
+    setStatus("Room ready", "online");
+
+    showToast(`Room ${room.code} created`);
+
+  } catch (error) {
+    console.error("CREATE ROOM ERROR:", error);
+
+    showEntryMessage(
+      readableDatabaseError(error)
+    );
+
+    setStatus("Ready", "online");
+
+  } finally {
+    setButtonLoading(createRoomBtn, false);
+  }
+}
+
+
+// =====================================================
+// JOIN ROOM
+// =====================================================
+
+async function joinRoom() {
+  const name = validateName();
+
+  if (!name) return;
+
+  const code = roomCodeInput.value
+    .trim()
+    .toUpperCase();
+
+  if (code.length !== 5) {
+    showEntryMessage("Enter a valid 5-character room code.");
+    roomCodeInput.focus();
+    return;
+  }
+
+  const playerId = getOrCreatePlayerId();
+
+  setButtonLoading(joinRoomBtn, true);
+  setStatus("Joining room...", "loading");
+  showEntryMessage("");
+
+  try {
+    const room = await getRoom(code);
+
+    if (!room) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
+
+    if (room.state !== "lobby") {
+      throw new Error("GAME_ALREADY_STARTED");
+    }
+
+    const players = await getPlayers(code);
+
+    if (players.length >= 30) {
+      throw new Error("ROOM_FULL");
+    }
+
+    const { error: playerError } = await supabaseClient
+      .from("players")
+      .upsert(
+        {
+          id: playerId,
+          room_code: code,
+          name: name,
+          status: "alive"
+        },
+        {
+          onConflict: "id"
+        }
+      );
+
+    if (playerError) {
+      throw playerError;
+    }
+
+    currentPlayer = {
+      id: playerId,
+      name: name,
+      status: "alive"
+    };
+
+    currentRoom = room;
+
+    savePlayerName(name);
+    saveRoomCode(code);
+
+    await refreshCurrentRoom();
+    await subscribeToRoom(code);
+
+    setStatus("Room realtime online", "online");
+
+    showToast(`Joined room ${code}`);
+
+  } catch (error) {
+    console.error("JOIN ROOM ERROR:", error);
+
+    if (error.message === "ROOM_NOT_FOUND") {
+      showEntryMessage("Room not found. Check the code and try again.");
+    } else if (error.message === "GAME_ALREADY_STARTED") {
+      showEntryMessage("That game has already started.");
+    } else if (error.message === "ROOM_FULL") {
+      showEntryMessage("That room is full. Maximum 30 players.");
+    } else {
+      showEntryMessage(
+        readableDatabaseError(error)
+      );
+    }
+
+    setStatus("Ready", "online");
+
+  } finally {
+    setButtonLoading(joinRoomBtn, false);
+  }
+}
+
+
+// =====================================================
+// REFRESH CURRENT ROOM
+// =====================================================
+
+async function refreshCurrentRoom() {
+  if (!currentRoom || !currentRoom.code) {
+    showPage(entryPage);
+    return;
+  }
+
+  try {
+    const room = await getRoom(currentRoom.code);
+
+    if (!room) {
+      clearSession();
+      showPage(entryPage);
+      showEntryMessage("The room no longer exists.");
+      return;
+    }
+
+    const players = await getPlayers(room.code);
+
+    currentRoom = room;
+
+    updateRoomUI(room, players);
+
+    if (room.state === "playing") {
+      showGameScreen(room, players);
+    } else {
+      showPage(lobbyPage);
+    }
+
+  } catch (error) {
+    console.error("REFRESH ROOM ERROR:", error);
+
+    setStatus(
+      readableDatabaseError(error),
+      "error"
+    );
+  }
+}
+
+
+// =====================================================
+// UPDATE ROOM UI
+// =====================================================
+
+function updateRoomUI(room, players) {
+  roomCodeDisplay.textContent = room.code;
+
+  playerCount.textContent = players.length;
+
+  roundDisplay.textContent =
+    `ROUND ${room.round || 0}`;
+
+  gamePlayerCount.textContent =
+    `${players.length} PLAYER${players.length === 1 ? "" : "S"}`;
+
+  renderPlayers(players);
+
+  const isHost =
+    currentPlayer &&
+    room.host_id === currentPlayer.id;
+
+  startGameBtn.style.display =
+    isHost ? "block" : "none";
+
+  if (isHost) {
+    lobbyMessage.textContent =
+      players.length >= 2
+        ? "You are the host. Start the game when everyone is ready."
+        : "Waiting for at least 2 players...";
+  } else {
+    lobbyMessage.textContent =
+      "Waiting for the host to start the game...";
+  }
+
+  startGameBtn.disabled =
+    !isHost || players.length < 2;
+}
+
+
+// =====================================================
+// RENDER PLAYERS
+// =====================================================
+
+function renderPlayers(players) {
+  playersList.innerHTML = "";
+
+  if (!players.length) {
+    playersList.innerHTML = `
+      <div class="empty-players">
+        No players yet.
+      </div>
+    `;
+
+    return;
+  }
+
+  players.forEach((player, index) => {
+    const item = document.createElement("div");
+
+    item.className = "player-item";
+
+    const safeName =
+      String(player.name || "Unknown")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const isHost =
+      currentRoom &&
+      currentRoom.host_id === player.id;
+
+    item.innerHTML = `
+      <div class="player-number">
+        ${index + 1}
+      </div>
+
+      <div class="player-name">
+        ${safeName}
+        ${isHost ? '<span class="host-tag">HOST</span>' : ""}
+      </div>
+
+      <div class="player-status">
+        ${player.status || "alive"}
+      </div>
+    `;
+
+    playersList.appendChild(item);
+  });
+}
+
+
+// =====================================================
+// START GAME
+// =====================================================
+
+async function startGame() {
+  if (!currentRoom || !currentPlayer) {
+    return;
+  }
+
+  if (currentRoom.host_id !== currentPlayer.id) {
+    showToast("Only the host can start the game.");
+    return;
+  }
+
+  setButtonLoading(startGameBtn, true);
+  setStatus("Starting game...", "loading");
+
+  try {
+    const players = await getPlayers(currentRoom.code);
+
+    if (players.length < 2) {
+      showToast("You need at least 2 players.");
+      return;
+    }
+
+    if (players.length > 30) {
+      showToast("Maximum 30 players allowed.");
+      return;
+    }
+
+    const { data, error } = await supabaseClient
+      .from("rooms")
+      .update({
+        state: "playing",
+        round: 1
+      })
+      .eq("code", currentRoom.code)
+      .eq("host_id", currentPlayer.id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    currentRoom = data;
+
+    showGameScreen(data, players);
+
+    setStatus("GAME ONLINE", "online");
+
+    showToast("GAME STARTED");
+
+  } catch (error) {
+    console.error("START GAME ERROR:", error);
+
+    showToast(
+      readableDatabaseError(error)
+    );
+
+    setStatus("Room realtime online", "online");
+
+  } finally {
+    setButtonLoading(startGameBtn, false);
+  }
+}
