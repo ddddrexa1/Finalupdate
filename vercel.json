@@ -1,4 +1,5 @@
 {
-  "version": 2,
-  "functions": {"api/ws.js":{"runtime":"nodejs24.x"}}
+  "functions": {
+    "api/ws.js": {}
+  }
 }
